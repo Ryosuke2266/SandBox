@@ -1,0 +1,20 @@
+{
+  "name": "task-manager",
+  "version": "1.0.0",
+  "description": "Portable Topic-Based Task Management Tool",
+  "scripts": {
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "start": "npm run start:backend & npm run start:frontend",
+    "start:backend": "cd backend && npm start",
+    "start:frontend": "cd frontend && npm run dev",
+    "dev": "npm run start:backend & npm run start:frontend"
+  },
+  "keywords": [
+    "task-manager",
+    "todo",
+    "productivity",
+    "portable"
+  ],
+  "author": "",
+  "license": "MIT"
+}

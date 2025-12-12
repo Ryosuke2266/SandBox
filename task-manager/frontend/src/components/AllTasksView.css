@@ -1,0 +1,134 @@
+.all-tasks-view {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  padding: 0.75rem 1.25rem;
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover {
+  background-color: var(--bg-secondary);
+}
+
+.filter-btn.active {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.filter-btn.overdue-btn {
+  color: var(--overdue-color);
+  border-color: var(--overdue-color);
+}
+
+.filter-btn.overdue-btn.active {
+  background-color: var(--overdue-color);
+  color: white;
+}
+
+.all-tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.task-item-all {
+  display: flex;
+  gap: 1rem;
+  padding: 1.25rem;
+  background-color: var(--bg-primary);
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-left: 3px solid var(--primary-color);
+  transition: all 0.2s;
+}
+
+.task-item-all:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.task-item-all.completed {
+  opacity: 0.6;
+}
+
+.task-item-all.completed .task-title {
+  text-decoration: line-through;
+}
+
+.task-item-all.overdue {
+  border-left-color: var(--overdue-color);
+}
+
+.task-content-all {
+  flex: 1;
+}
+
+.task-topic-link {
+  margin: 0.75rem 0;
+}
+
+.topic-link-btn {
+  background-color: var(--bg-secondary);
+  color: var(--primary-color);
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+  border: 1px solid var(--border-color);
+}
+
+.topic-link-btn:hover {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.topic-due-date {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .filter-bar {
+    gap: 0.5rem;
+  }
+
+  .filter-btn {
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    flex: 1;
+    min-width: calc(50% - 0.25rem);
+  }
+
+  .task-item-all {
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .task-checkbox {
+    order: -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .filter-btn {
+    min-width: 100%;
+  }
+}
