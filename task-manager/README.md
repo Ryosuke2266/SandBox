@@ -44,7 +44,7 @@ A portable, self-contained task management application designed to capture topic
    ```
 
 4. **Open your browser**
-   - Frontend: http://localhost:3000
+   - Frontend: http://localhost:5173
    - Backend API: http://localhost:3001
 
 ### One-Command Setup and Run
