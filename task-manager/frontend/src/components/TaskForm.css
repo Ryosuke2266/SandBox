@@ -1,0 +1,89 @@
+.task-form {
+  background-color: var(--bg-secondary);
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+  border: 2px dashed var(--border-color);
+}
+
+.task-form .form-group {
+  margin-bottom: 1rem;
+}
+
+.task-form input,
+.task-form textarea,
+.task-form select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.task-form input:focus,
+.task-form textarea:focus,
+.task-form select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.task-form .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.task-form .form-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.task-form .btn-cancel {
+  padding: 0.625rem 1.25rem;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.task-form .btn-cancel:hover {
+  background-color: var(--border-color);
+}
+
+.task-form .btn-save {
+  padding: 0.625rem 1.25rem;
+  background-color: var(--success-color);
+  color: white;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.task-form .btn-save:hover {
+  background-color: #047857;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .task-form {
+    padding: 1rem;
+  }
+
+  .task-form .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .task-form .form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .task-form .btn-cancel,
+  .task-form .btn-save {
+    width: 100%;
+  }
+}
