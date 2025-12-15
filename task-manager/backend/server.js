@@ -248,15 +248,16 @@ app.get('/api/search', (req, res) => {
   }
 });
 
-// Serve static frontend in production
-if (process.env.NODE_ENV === 'production') {
-  const path = require('path');
-  app.use(express.static(path.join(__dirname, '../frontend/dist')));
-
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
-  });
-}
+// Serve static frontend in production (optional - use only if deploying as monorepo)
+// For separate backend/frontend deployments, comment this out
+// if (process.env.NODE_ENV === 'production') {
+//   const path = require('path');
+//   app.use(express.static(path.join(__dirname, '../frontend/dist')));
+//
+//   app.get('*', (req, res) => {
+//     res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+//   });
+// }
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
