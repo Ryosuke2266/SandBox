@@ -3,11 +3,32 @@ const cors = require('cors');
 const db = require('./database');
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Simple authentication middleware
+const AUTH_TOKEN = process.env.AUTH_TOKEN || 'your-secret-token-change-this';
+
+const authenticate = (req, res, next) => {
+  const token = req.headers['authorization'];
+
+  if (token === `Bearer ${AUTH_TOKEN}`) {
+    next();
+  } else {
+    res.status(401).json({ error: 'Unauthorized' });
+  }
+};
+
+// Health check (no auth required)
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'Task Manager API is running' });
+});
+
+// Apply authentication to all other API routes
+app.use('/api', authenticate);
 
 // ==================== TOPIC ENDPOINTS ====================
 
@@ -227,13 +248,18 @@ app.get('/api/search', (req, res) => {
   }
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Task Manager API is running' });
-});
+// Serve static frontend in production
+if (process.env.NODE_ENV === 'production') {
+  const path = require('path');
+  app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+  });
+}
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`✅ Task Manager API running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Task Manager API running on port ${PORT}`);
   console.log(`📊 Database: ${__dirname}/tasks.json`);
 });
