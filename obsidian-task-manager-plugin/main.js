@@ -1,6 +1,6 @@
-const { Plugin, Modal, Notice, TFile, MarkdownView } = require('obsidian');
+const { Plugin, Modal, Notice } = require('obsidian');
 
-module.exports = class TopicTaskManagerPlugin extends Plugin {
+class TopicTaskManagerPlugin extends Plugin {
   async onload() {
     console.log('Loading Topic-Based Task Manager Plugin');
 
@@ -43,7 +43,7 @@ module.exports = class TopicTaskManagerPlugin extends Plugin {
 
   // Helper: Get topics folder
   getTopicsFolder() {
-    return 'Topics'; // You can make this configurable in settings
+    return 'Topics';
   }
 
   // Helper: Ensure topics folder exists
@@ -70,7 +70,9 @@ module.exports = class TopicTaskManagerPlugin extends Plugin {
     await this.ensureTopicsFolder();
     const { title, description, dueDate, context, tags } = data;
 
-    const fileName = `${this.getTopicsFolder()}/${title}.md`;
+    // Sanitize filename
+    const safeTitle = title.replace(/[\\/:*?"<>|]/g, '-');
+    const fileName = `${this.getTopicsFolder()}/${safeTitle}.md`;
 
     const content = `---
 title: ${title}
@@ -87,16 +89,24 @@ ${description || ''}
 
 ## Tasks
 
-<!-- Add tasks below using Obsidian task format: - [ ] Task name -->
+<!-- Add tasks below using: - [ ] Task name -->
 
 `;
 
     try {
+      // Check if file already exists
+      const existingFile = this.app.vault.getAbstractFileByPath(fileName);
+      if (existingFile) {
+        new Notice(`Topic "${title}" already exists!`);
+        return existingFile;
+      }
+
       const file = await this.app.vault.create(fileName, content);
-      new Notice(`Topic "${title}" created!`);
+      new Notice(`✅ Topic "${title}" created!`);
       return file;
     } catch (error) {
-      new Notice(`Error creating topic: ${error.message}`);
+      new Notice(`❌ Error creating topic: ${error.message}`);
+      console.error('Error creating topic:', error);
       return null;
     }
   }
@@ -111,7 +121,6 @@ ${description || ''}
 
     // Parse frontmatter
     let inFrontmatter = false;
-    let inTasks = false;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -122,14 +131,14 @@ ${description || ''}
       }
 
       if (inFrontmatter) {
-        const match = line.match(/^(\w+):\s*(.+)$/);
+        const match = line.match(/^(\w+):\s*(.*)$/);
         if (match) {
           metadata[match[1]] = match[2];
         }
       }
 
       // Parse tasks
-      if (line.trim().startsWith('- [')) {
+      if (line.trim().match(/^- \[.\]/)) {
         const isComplete = line.includes('- [x]') || line.includes('- [X]');
         const taskText = line.replace(/^- \[.\]\s*/, '').trim();
 
@@ -158,7 +167,7 @@ ${description || ''}
       content: content
     };
   }
-};
+}
 
 // Modal to show list of topics
 class TopicListModal extends Modal {
@@ -170,19 +179,22 @@ class TopicListModal extends Modal {
   async onOpen() {
     const { contentEl } = this;
     contentEl.empty();
+    contentEl.addClass('topic-manager-modal');
 
     contentEl.createEl('h2', { text: '📋 Topics' });
 
     // Add "New Topic" button
-    const buttonContainer = contentEl.createDiv({ cls: 'button-container' });
+    const buttonContainer = contentEl.createDiv({ cls: 'topic-button-container' });
     const newTopicBtn = buttonContainer.createEl('button', {
       text: '+ New Topic',
       cls: 'mod-cta'
     });
-    newTopicBtn.addEventListener('click', () => {
+
+    // Use onclick instead of addEventListener for better compatibility
+    newTopicBtn.onclick = () => {
       this.close();
       new CreateTopicModal(this.app, this.plugin).open();
-    });
+    };
 
     // Get and display topics
     const topics = await this.plugin.getAllTopics();
@@ -204,16 +216,18 @@ class TopicListModal extends Modal {
 
       const titleEl = topicCard.createEl('h3', { text: topicData.title });
       titleEl.style.cursor = 'pointer';
-      titleEl.addEventListener('click', async () => {
+
+      titleEl.onclick = async () => {
         this.close();
-        await this.app.workspace.openLinkText(topicFile.path, '', false);
-      });
+        const leaf = this.app.workspace.getLeaf(false);
+        await leaf.openFile(topicFile);
+      };
 
       if (topicData.dueDate) {
         const dueDate = new Date(topicData.dueDate);
         const isOverdue = dueDate < new Date();
         topicCard.createEl('p', {
-          text: `Due: ${topicData.dueDate}`,
+          text: `📅 Due: ${topicData.dueDate}`,
           cls: isOverdue ? 'overdue' : 'due-date'
         });
       }
@@ -221,12 +235,13 @@ class TopicListModal extends Modal {
       const taskCount = topicData.tasks.length;
       const completedCount = topicData.tasks.filter(t => t.completed).length;
       topicCard.createEl('p', {
-        text: `${completedCount}/${taskCount} tasks completed`
+        text: `✓ ${completedCount}/${taskCount} tasks completed`,
+        cls: 'task-count'
       });
 
       if (topicData.context) {
         topicCard.createEl('p', {
-          text: `Context: ${topicData.context}`,
+          text: `💬 ${topicData.context}`,
           cls: 'context'
         });
       }
@@ -249,64 +264,79 @@ class CreateTopicModal extends Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
+    contentEl.addClass('topic-manager-modal');
 
-    contentEl.createEl('h2', { text: 'Create New Topic' });
+    contentEl.createEl('h2', { text: '✨ Create New Topic' });
 
     const form = contentEl.createDiv({ cls: 'topic-form' });
 
     // Title
-    form.createEl('label', { text: 'Title *' });
+    form.createEl('label', { text: 'Title *', cls: 'topic-label' });
     const titleInput = form.createEl('input', {
       type: 'text',
-      placeholder: 'e.g., Weekly Team Meeting'
+      placeholder: 'e.g., Weekly Team Meeting',
+      cls: 'topic-input'
     });
     titleInput.focus();
 
     // Description
-    form.createEl('label', { text: 'Description' });
+    form.createEl('label', { text: 'Description', cls: 'topic-label' });
     const descInput = form.createEl('textarea', {
-      placeholder: 'What was discussed...'
+      placeholder: 'What was discussed...',
+      cls: 'topic-textarea'
     });
     descInput.rows = 4;
 
     // Due Date
-    form.createEl('label', { text: 'Due Date' });
-    const dueDateInput = form.createEl('input', { type: 'date' });
+    form.createEl('label', { text: 'Due Date', cls: 'topic-label' });
+    const dueDateInput = form.createEl('input', {
+      type: 'date',
+      cls: 'topic-input'
+    });
 
     // Context
-    form.createEl('label', { text: 'Context' });
+    form.createEl('label', { text: 'Context', cls: 'topic-label' });
     const contextInput = form.createEl('input', {
       type: 'text',
-      placeholder: 'e.g., Meeting with John'
+      placeholder: 'e.g., Meeting with John',
+      cls: 'topic-input'
     });
 
     // Tags
-    form.createEl('label', { text: 'Tags (comma-separated)' });
+    form.createEl('label', { text: 'Tags (comma-separated)', cls: 'topic-label' });
     const tagsInput = form.createEl('input', {
       type: 'text',
-      placeholder: 'e.g., urgent, marketing'
+      placeholder: 'e.g., urgent, marketing',
+      cls: 'topic-input'
     });
 
     // Buttons
-    const buttonContainer = form.createDiv({ cls: 'button-container' });
+    const buttonContainer = form.createDiv({ cls: 'topic-button-container' });
 
-    const cancelBtn = buttonContainer.createEl('button', { text: 'Cancel' });
-    cancelBtn.addEventListener('click', () => this.close());
+    const cancelBtn = buttonContainer.createEl('button', {
+      text: 'Cancel',
+      cls: 'topic-btn-cancel'
+    });
+
+    cancelBtn.onclick = () => {
+      this.close();
+    };
 
     const createBtn = buttonContainer.createEl('button', {
       text: 'Create Topic',
-      cls: 'mod-cta'
+      cls: 'mod-cta topic-btn-create'
     });
 
-    createBtn.addEventListener('click', async () => {
+    createBtn.onclick = async () => {
       const title = titleInput.value.trim();
 
       if (!title) {
-        new Notice('Title is required!');
+        new Notice('❗ Title is required!');
+        titleInput.focus();
         return;
       }
 
-      await this.plugin.createTopic({
+      const file = await this.plugin.createTopic({
         title: title,
         description: descInput.value.trim(),
         dueDate: dueDateInput.value,
@@ -314,16 +344,20 @@ class CreateTopicModal extends Modal {
         tags: tagsInput.value.trim()
       });
 
-      this.close();
-      new TopicListModal(this.app, this.plugin).open();
-    });
+      if (file) {
+        this.close();
+        // Open the newly created file
+        const leaf = this.app.workspace.getLeaf(false);
+        await leaf.openFile(file);
+      }
+    };
 
-    // Enter key to create
-    titleInput.addEventListener('keypress', (e) => {
+    // Enter key in title to create
+    titleInput.onkeypress = (e) => {
       if (e.key === 'Enter') {
         createBtn.click();
       }
-    });
+    };
   }
 
   onClose() {
@@ -337,11 +371,13 @@ class AllTasksModal extends Modal {
   constructor(app, plugin) {
     super(app);
     this.plugin = plugin;
+    this.currentFilter = 'all';
   }
 
   async onOpen() {
     const { contentEl } = this;
     contentEl.empty();
+    contentEl.addClass('topic-manager-modal');
 
     contentEl.createEl('h2', { text: '✓ All Tasks' });
 
@@ -371,7 +407,7 @@ class AllTasksModal extends Modal {
     // Filter buttons
     const filterContainer = contentEl.createDiv({ cls: 'filter-container' });
 
-    let currentFilter = 'all';
+    const taskList = contentEl.createDiv({ cls: 'task-list' });
 
     const renderTasks = (filter) => {
       taskList.empty();
@@ -381,6 +417,14 @@ class AllTasksModal extends Modal {
         if (filter === 'completed') return task.completed;
         return true;
       });
+
+      if (filtered.length === 0) {
+        taskList.createEl('p', {
+          text: `No ${filter} tasks found.`,
+          cls: 'empty-state'
+        });
+        return;
+      }
 
       for (const task of filtered) {
         const taskEl = taskList.createDiv({ cls: 'task-item' });
@@ -392,41 +436,54 @@ class AllTasksModal extends Modal {
 
         const taskText = taskEl.createEl('span', {
           text: task.text,
-          cls: task.completed ? 'task-completed' : ''
+          cls: task.completed ? 'task-text task-completed' : 'task-text'
         });
 
-        taskEl.createEl('span', {
+        const topicLink = taskEl.createEl('span', {
           text: `[${task.topicTitle}]`,
           cls: 'task-topic'
-        }).addEventListener('click', async () => {
-          this.close();
-          await this.app.workspace.openLinkText(task.topicFile.path, '', false);
         });
+
+        topicLink.onclick = async () => {
+          this.close();
+          const leaf = this.app.workspace.getLeaf(false);
+          await leaf.openFile(task.topicFile);
+        };
 
         if (task.priority !== 'Medium') {
           taskEl.createEl('span', {
             text: task.priority,
-            cls: `priority-${task.priority.toLowerCase()}`
+            cls: `priority-badge priority-${task.priority.toLowerCase()}`
           });
         }
       }
     };
 
-    ['all', 'pending', 'completed'].forEach(filter => {
+    // Create filter buttons
+    const filters = [
+      { id: 'all', label: 'All', count: allTasks.length },
+      { id: 'pending', label: 'Pending', count: allTasks.filter(t => !t.completed).length },
+      { id: 'completed', label: 'Completed', count: allTasks.filter(t => t.completed).length }
+    ];
+
+    filters.forEach(filter => {
       const btn = filterContainer.createEl('button', {
-        text: filter.charAt(0).toUpperCase() + filter.slice(1)
-      });
-      btn.addEventListener('click', () => {
-        currentFilter = filter;
-        filterContainer.querySelectorAll('button').forEach(b => b.removeClass('active'));
-        btn.addClass('active');
-        renderTasks(filter);
+        text: `${filter.label} (${filter.count})`,
+        cls: 'filter-btn'
       });
 
-      if (filter === 'all') btn.addClass('active');
+      if (filter.id === 'all') {
+        btn.addClass('active');
+      }
+
+      btn.onclick = () => {
+        this.currentFilter = filter.id;
+        filterContainer.querySelectorAll('.filter-btn').forEach(b => b.removeClass('active'));
+        btn.addClass('active');
+        renderTasks(filter.id);
+      };
     });
 
-    const taskList = contentEl.createDiv({ cls: 'task-list' });
     renderTasks('all');
   }
 
@@ -435,3 +492,5 @@ class AllTasksModal extends Modal {
     contentEl.empty();
   }
 }
+
+module.exports = TopicTaskManagerPlugin;
