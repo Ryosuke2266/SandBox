@@ -1,0 +1,10 @@
+{
+  "id": "topic-task-manager",
+  "name": "Topic-Based Task Manager",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Manage tasks organized by conversation topics. Store everything as markdown notes.",
+  "author": "Your Name",
+  "authorUrl": "https://github.com/yourusername",
+  "isDesktopOnly": false
+}
