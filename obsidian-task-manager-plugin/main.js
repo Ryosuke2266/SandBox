@@ -2,11 +2,17 @@ const { Plugin, Modal, Notice } = require('obsidian');
 
 class TopicTaskManagerPlugin extends Plugin {
   async onload() {
-    console.log('Loading Topic-Based Task Manager Plugin');
+    console.log('Topic-Based Task Manager: Loading plugin');
 
     // Add ribbon icon
     this.addRibbonIcon('clipboard-list', 'Topic Task Manager', () => {
-      new TopicListModal(this.app, this).open();
+      console.log('Topic-Based Task Manager: Ribbon icon clicked');
+      try {
+        new TopicListModal(this.app, this).open();
+      } catch (error) {
+        console.error('Topic-Based Task Manager: Error opening modal', error);
+        new Notice('Error opening topic list: ' + error.message);
+      }
     });
 
     // Add command to create new topic
@@ -14,6 +20,7 @@ class TopicTaskManagerPlugin extends Plugin {
       id: 'create-new-topic',
       name: 'Create New Topic',
       callback: () => {
+        console.log('Topic-Based Task Manager: Create topic command');
         new CreateTopicModal(this.app, this).open();
       }
     });
@@ -23,54 +30,42 @@ class TopicTaskManagerPlugin extends Plugin {
       id: 'view-all-tasks',
       name: 'View All Tasks',
       callback: () => {
+        console.log('Topic-Based Task Manager: View all tasks command');
         new AllTasksModal(this.app, this).open();
-      }
-    });
-
-    // Add command to view topics
-    this.addCommand({
-      id: 'view-topics',
-      name: 'View Topics',
-      callback: () => {
-        new TopicListModal(this.app, this).open();
       }
     });
   }
 
   onunload() {
-    console.log('Unloading Topic-Based Task Manager Plugin');
+    console.log('Topic-Based Task Manager: Unloading plugin');
   }
 
-  // Helper: Get topics folder
   getTopicsFolder() {
     return 'Topics';
   }
 
-  // Helper: Ensure topics folder exists
   async ensureTopicsFolder() {
     const folderPath = this.getTopicsFolder();
     const folder = this.app.vault.getAbstractFileByPath(folderPath);
 
     if (!folder) {
+      console.log('Topic-Based Task Manager: Creating Topics folder');
       await this.app.vault.createFolder(folderPath);
     }
   }
 
-  // Get all topic files
   async getAllTopics() {
     await this.ensureTopicsFolder();
     const files = this.app.vault.getMarkdownFiles();
     const topicsFolder = this.getTopicsFolder();
-
     return files.filter(file => file.path.startsWith(topicsFolder + '/'));
   }
 
-  // Create a new topic
   async createTopic(data) {
+    console.log('Topic-Based Task Manager: Creating topic', data);
     await this.ensureTopicsFolder();
     const { title, description, dueDate, context, tags } = data;
 
-    // Sanitize filename
     const safeTitle = title.replace(/[\\/:*?"<>|]/g, '-');
     const fileName = `${this.getTopicsFolder()}/${safeTitle}.md`;
 
@@ -94,7 +89,6 @@ ${description || ''}
 `;
 
     try {
-      // Check if file already exists
       const existingFile = this.app.vault.getAbstractFileByPath(fileName);
       if (existingFile) {
         new Notice(`Topic "${title}" already exists!`);
@@ -103,23 +97,20 @@ ${description || ''}
 
       const file = await this.app.vault.create(fileName, content);
       new Notice(`✅ Topic "${title}" created!`);
+      console.log('Topic-Based Task Manager: Topic created successfully', file.path);
       return file;
     } catch (error) {
-      new Notice(`❌ Error creating topic: ${error.message}`);
-      console.error('Error creating topic:', error);
+      console.error('Topic-Based Task Manager: Error creating topic', error);
+      new Notice(`❌ Error: ${error.message}`);
       return null;
     }
   }
 
-  // Parse topic file to get metadata and tasks
   async parseTopicFile(file) {
     const content = await this.app.vault.read(file);
     const lines = content.split('\n');
-
     const metadata = {};
     const tasks = [];
-
-    // Parse frontmatter
     let inFrontmatter = false;
 
     for (let i = 0; i < lines.length; i++) {
@@ -137,15 +128,12 @@ ${description || ''}
         }
       }
 
-      // Parse tasks
       if (line.trim().match(/^- \[.\]/)) {
         const isComplete = line.includes('- [x]') || line.includes('- [X]');
         const taskText = line.replace(/^- \[.\]\s*/, '').trim();
-
-        // Extract priority if present
         let priority = 'Medium';
-        if (taskText.includes('(High)') || taskText.includes('🔴')) priority = 'High';
-        if (taskText.includes('(Low)') || taskText.includes('🟢')) priority = 'Low';
+        if (taskText.includes('(High)')) priority = 'High';
+        if (taskText.includes('(Low)')) priority = 'Low';
 
         tasks.push({
           text: taskText.replace(/\((High|Medium|Low)\)/g, '').trim(),
@@ -163,171 +151,216 @@ ${description || ''}
       tags: metadata.tags || '',
       status: metadata.status || 'active',
       created: metadata.created || '',
-      tasks: tasks,
-      content: content
+      tasks: tasks
     };
   }
 }
 
-// Modal to show list of topics
 class TopicListModal extends Modal {
   constructor(app, plugin) {
     super(app);
     this.plugin = plugin;
+    console.log('Topic-Based Task Manager: TopicListModal created');
   }
 
   async onOpen() {
+    console.log('Topic-Based Task Manager: TopicListModal opening');
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.addClass('topic-manager-modal');
 
-    contentEl.createEl('h2', { text: '📋 Topics' });
+    const container = contentEl.createDiv();
+    container.createEl('h2', { text: '📋 Topics' });
 
-    // Add "New Topic" button
-    const buttonContainer = contentEl.createDiv({ cls: 'topic-button-container' });
-    const newTopicBtn = buttonContainer.createEl('button', {
+    const buttonDiv = container.createDiv();
+    buttonDiv.style.marginBottom = '1rem';
+
+    const newTopicBtn = buttonDiv.createEl('button', {
       text: '+ New Topic',
       cls: 'mod-cta'
     });
 
-    // Use onclick instead of addEventListener for better compatibility
-    newTopicBtn.onclick = () => {
-      this.close();
-      new CreateTopicModal(this.app, this.plugin).open();
+    const self = this;
+
+    // Test if button exists
+    console.log('Topic-Based Task Manager: New Topic button created', newTopicBtn);
+
+    // Try multiple ways to attach the handler
+    newTopicBtn.addEventListener('click', function(e) {
+      console.log('Topic-Based Task Manager: New Topic button clicked (addEventListener)');
+      e.preventDefault();
+      e.stopPropagation();
+      self.close();
+      setTimeout(() => {
+        new CreateTopicModal(self.app, self.plugin).open();
+      }, 100);
+    });
+
+    newTopicBtn.onclick = function(e) {
+      console.log('Topic-Based Task Manager: New Topic button clicked (onclick)');
+      e.preventDefault();
+      e.stopPropagation();
+      self.close();
+      setTimeout(() => {
+        new CreateTopicModal(self.app, self.plugin).open();
+      }, 100);
+      return false;
     };
 
-    // Get and display topics
-    const topics = await this.plugin.getAllTopics();
+    try {
+      const topics = await this.plugin.getAllTopics();
+      console.log('Topic-Based Task Manager: Found topics:', topics.length);
 
-    if (topics.length === 0) {
-      contentEl.createEl('p', {
-        text: 'No topics yet. Create your first topic!',
-        cls: 'empty-state'
-      });
-      return;
-    }
-
-    const topicList = contentEl.createDiv({ cls: 'topic-list' });
-
-    for (const topicFile of topics) {
-      const topicData = await this.plugin.parseTopicFile(topicFile);
-
-      const topicCard = topicList.createDiv({ cls: 'topic-card' });
-
-      const titleEl = topicCard.createEl('h3', { text: topicData.title });
-      titleEl.style.cursor = 'pointer';
-
-      titleEl.onclick = async () => {
-        this.close();
-        const leaf = this.app.workspace.getLeaf(false);
-        await leaf.openFile(topicFile);
-      };
-
-      if (topicData.dueDate) {
-        const dueDate = new Date(topicData.dueDate);
-        const isOverdue = dueDate < new Date();
-        topicCard.createEl('p', {
-          text: `📅 Due: ${topicData.dueDate}`,
-          cls: isOverdue ? 'overdue' : 'due-date'
+      if (topics.length === 0) {
+        container.createEl('p', {
+          text: 'No topics yet. Create your first topic!',
+          cls: 'mod-muted'
         });
-      }
+      } else {
+        const topicList = container.createDiv();
+        topicList.style.marginTop = '1rem';
 
-      const taskCount = topicData.tasks.length;
-      const completedCount = topicData.tasks.filter(t => t.completed).length;
-      topicCard.createEl('p', {
-        text: `✓ ${completedCount}/${taskCount} tasks completed`,
-        cls: 'task-count'
+        for (const topicFile of topics) {
+          const topicData = await this.plugin.parseTopicFile(topicFile);
+          const topicCard = topicList.createDiv();
+          topicCard.style.marginBottom = '0.5rem';
+          topicCard.style.padding = '0.5rem';
+          topicCard.style.border = '1px solid var(--background-modifier-border)';
+          topicCard.style.borderRadius = '4px';
+
+          const titleEl = topicCard.createEl('h3', { text: topicData.title });
+          titleEl.style.cursor = 'pointer';
+          titleEl.style.margin = '0 0 0.5rem 0';
+
+          titleEl.onclick = async () => {
+            console.log('Topic-Based Task Manager: Opening topic', topicFile.path);
+            self.close();
+            const leaf = this.app.workspace.getLeaf(false);
+            await leaf.openFile(topicFile);
+          };
+
+          const taskCount = topicData.tasks.length;
+          const completedCount = topicData.tasks.filter(t => t.completed).length;
+          topicCard.createEl('p', {
+            text: `✓ ${completedCount}/${taskCount} tasks`,
+            cls: 'mod-muted'
+          });
+
+          if (topicData.context) {
+            topicCard.createEl('p', {
+              text: `💬 ${topicData.context}`,
+              cls: 'mod-muted'
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Topic-Based Task Manager: Error loading topics', error);
+      container.createEl('p', {
+        text: 'Error loading topics: ' + error.message,
+        cls: 'mod-warning'
       });
-
-      if (topicData.context) {
-        topicCard.createEl('p', {
-          text: `💬 ${topicData.context}`,
-          cls: 'context'
-        });
-      }
     }
   }
 
   onClose() {
+    console.log('Topic-Based Task Manager: TopicListModal closing');
     const { contentEl } = this;
     contentEl.empty();
   }
 }
 
-// Modal to create a new topic
 class CreateTopicModal extends Modal {
   constructor(app, plugin) {
     super(app);
     this.plugin = plugin;
+    console.log('Topic-Based Task Manager: CreateTopicModal created');
   }
 
   onOpen() {
+    console.log('Topic-Based Task Manager: CreateTopicModal opening');
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.addClass('topic-manager-modal');
 
-    contentEl.createEl('h2', { text: '✨ Create New Topic' });
+    const container = contentEl.createDiv();
+    container.createEl('h2', { text: '✨ Create New Topic' });
 
-    const form = contentEl.createDiv({ cls: 'topic-form' });
+    const form = container.createDiv();
+    form.style.display = 'flex';
+    form.style.flexDirection = 'column';
+    form.style.gap = '1rem';
 
     // Title
-    form.createEl('label', { text: 'Title *', cls: 'topic-label' });
+    form.createEl('label', { text: 'Title *' });
     const titleInput = form.createEl('input', {
       type: 'text',
-      placeholder: 'e.g., Weekly Team Meeting',
-      cls: 'topic-input'
+      placeholder: 'e.g., Weekly Team Meeting'
     });
+    titleInput.style.width = '100%';
     titleInput.focus();
 
     // Description
-    form.createEl('label', { text: 'Description', cls: 'topic-label' });
+    form.createEl('label', { text: 'Description' });
     const descInput = form.createEl('textarea', {
-      placeholder: 'What was discussed...',
-      cls: 'topic-textarea'
+      placeholder: 'What was discussed...'
     });
+    descInput.style.width = '100%';
     descInput.rows = 4;
 
     // Due Date
-    form.createEl('label', { text: 'Due Date', cls: 'topic-label' });
-    const dueDateInput = form.createEl('input', {
-      type: 'date',
-      cls: 'topic-input'
-    });
+    form.createEl('label', { text: 'Due Date' });
+    const dueDateInput = form.createEl('input', { type: 'date' });
+    dueDateInput.style.width = '100%';
 
     // Context
-    form.createEl('label', { text: 'Context', cls: 'topic-label' });
+    form.createEl('label', { text: 'Context' });
     const contextInput = form.createEl('input', {
       type: 'text',
-      placeholder: 'e.g., Meeting with John',
-      cls: 'topic-input'
+      placeholder: 'e.g., Meeting with John'
     });
+    contextInput.style.width = '100%';
 
     // Tags
-    form.createEl('label', { text: 'Tags (comma-separated)', cls: 'topic-label' });
+    form.createEl('label', { text: 'Tags (comma-separated)' });
     const tagsInput = form.createEl('input', {
       type: 'text',
-      placeholder: 'e.g., urgent, marketing',
-      cls: 'topic-input'
+      placeholder: 'e.g., urgent, marketing'
     });
+    tagsInput.style.width = '100%';
 
     // Buttons
-    const buttonContainer = form.createDiv({ cls: 'topic-button-container' });
+    const buttonContainer = form.createDiv();
+    buttonContainer.style.display = 'flex';
+    buttonContainer.style.gap = '0.5rem';
+    buttonContainer.style.justifyContent = 'flex-end';
+    buttonContainer.style.marginTop = '1rem';
 
-    const cancelBtn = buttonContainer.createEl('button', {
-      text: 'Cancel',
-      cls: 'topic-btn-cancel'
-    });
-
-    cancelBtn.onclick = () => {
-      this.close();
-    };
-
+    const cancelBtn = buttonContainer.createEl('button', { text: 'Cancel' });
     const createBtn = buttonContainer.createEl('button', {
       text: 'Create Topic',
-      cls: 'mod-cta topic-btn-create'
+      cls: 'mod-cta'
     });
 
-    createBtn.onclick = async () => {
+    const self = this;
+
+    console.log('Topic-Based Task Manager: Buttons created', { cancelBtn, createBtn });
+
+    // Cancel button
+    cancelBtn.addEventListener('click', (e) => {
+      console.log('Topic-Based Task Manager: Cancel clicked');
+      e.preventDefault();
+      self.close();
+    });
+
+    cancelBtn.onclick = (e) => {
+      console.log('Topic-Based Task Manager: Cancel clicked (onclick)');
+      e.preventDefault();
+      self.close();
+      return false;
+    };
+
+    // Create button
+    const createTopic = async () => {
+      console.log('Topic-Based Task Manager: Create topic handler called');
       const title = titleInput.value.trim();
 
       if (!title) {
@@ -336,158 +369,131 @@ class CreateTopicModal extends Modal {
         return;
       }
 
-      const file = await this.plugin.createTopic({
-        title: title,
-        description: descInput.value.trim(),
-        dueDate: dueDateInput.value,
-        context: contextInput.value.trim(),
-        tags: tagsInput.value.trim()
-      });
+      try {
+        const file = await self.plugin.createTopic({
+          title: title,
+          description: descInput.value.trim(),
+          dueDate: dueDateInput.value,
+          context: contextInput.value.trim(),
+          tags: tagsInput.value.trim()
+        });
 
-      if (file) {
-        this.close();
-        // Open the newly created file
-        const leaf = this.app.workspace.getLeaf(false);
-        await leaf.openFile(file);
+        if (file) {
+          self.close();
+          const leaf = self.app.workspace.getLeaf(false);
+          await leaf.openFile(file);
+        }
+      } catch (error) {
+        console.error('Topic-Based Task Manager: Error in create handler', error);
+        new Notice('Error creating topic: ' + error.message);
       }
     };
 
-    // Enter key in title to create
-    titleInput.onkeypress = (e) => {
+    createBtn.addEventListener('click', async (e) => {
+      console.log('Topic-Based Task Manager: Create clicked (addEventListener)');
+      e.preventDefault();
+      await createTopic();
+    });
+
+    createBtn.onclick = async (e) => {
+      console.log('Topic-Based Task Manager: Create clicked (onclick)');
+      e.preventDefault();
+      await createTopic();
+      return false;
+    };
+
+    // Enter key
+    titleInput.addEventListener('keypress', async (e) => {
       if (e.key === 'Enter') {
-        createBtn.click();
+        console.log('Topic-Based Task Manager: Enter key pressed');
+        e.preventDefault();
+        await createTopic();
       }
-    };
+    });
   }
 
   onClose() {
+    console.log('Topic-Based Task Manager: CreateTopicModal closing');
     const { contentEl } = this;
     contentEl.empty();
   }
 }
 
-// Modal to view all tasks across topics
 class AllTasksModal extends Modal {
   constructor(app, plugin) {
     super(app);
     this.plugin = plugin;
-    this.currentFilter = 'all';
   }
 
   async onOpen() {
+    console.log('Topic-Based Task Manager: AllTasksModal opening');
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.addClass('topic-manager-modal');
 
-    contentEl.createEl('h2', { text: '✓ All Tasks' });
+    const container = contentEl.createDiv();
+    container.createEl('h2', { text: '✓ All Tasks' });
 
-    const topics = await this.plugin.getAllTopics();
-    const allTasks = [];
+    try {
+      const topics = await this.plugin.getAllTopics();
+      const allTasks = [];
 
-    for (const topicFile of topics) {
-      const topicData = await this.plugin.parseTopicFile(topicFile);
-
-      for (const task of topicData.tasks) {
-        allTasks.push({
-          ...task,
-          topicTitle: topicData.title,
-          topicFile: topicFile
-        });
+      for (const topicFile of topics) {
+        const topicData = await this.plugin.parseTopicFile(topicFile);
+        for (const task of topicData.tasks) {
+          allTasks.push({
+            ...task,
+            topicTitle: topicData.title,
+            topicFile: topicFile
+          });
+        }
       }
-    }
 
-    if (allTasks.length === 0) {
-      contentEl.createEl('p', {
-        text: 'No tasks yet. Create a topic and add tasks!',
-        cls: 'empty-state'
-      });
-      return;
-    }
-
-    // Filter buttons
-    const filterContainer = contentEl.createDiv({ cls: 'filter-container' });
-
-    const taskList = contentEl.createDiv({ cls: 'task-list' });
-
-    const renderTasks = (filter) => {
-      taskList.empty();
-
-      const filtered = allTasks.filter(task => {
-        if (filter === 'pending') return !task.completed;
-        if (filter === 'completed') return task.completed;
-        return true;
-      });
-
-      if (filtered.length === 0) {
-        taskList.createEl('p', {
-          text: `No ${filter} tasks found.`,
-          cls: 'empty-state'
+      if (allTasks.length === 0) {
+        container.createEl('p', {
+          text: 'No tasks yet. Create a topic and add tasks!',
+          cls: 'mod-muted'
         });
         return;
       }
 
-      for (const task of filtered) {
-        const taskEl = taskList.createDiv({ cls: 'task-item' });
+      const taskList = container.createDiv();
+      taskList.style.marginTop = '1rem';
 
-        taskEl.createEl('span', {
-          text: task.completed ? '✓' : '○',
-          cls: 'task-checkbox'
-        });
+      for (const task of allTasks) {
+        const taskDiv = taskList.createDiv();
+        taskDiv.style.marginBottom = '0.5rem';
+        taskDiv.style.padding = '0.5rem';
+        taskDiv.style.border = '1px solid var(--background-modifier-border)';
+        taskDiv.style.borderRadius = '4px';
 
-        const taskText = taskEl.createEl('span', {
-          text: task.text,
-          cls: task.completed ? 'task-text task-completed' : 'task-text'
-        });
+        const checkbox = task.completed ? '✓' : '○';
+        const taskText = `${checkbox} ${task.text} [${task.topicTitle}]`;
 
-        const topicLink = taskEl.createEl('span', {
-          text: `[${task.topicTitle}]`,
-          cls: 'task-topic'
-        });
+        const taskEl = taskDiv.createEl('p', { text: taskText });
+        if (task.completed) {
+          taskEl.style.textDecoration = 'line-through';
+          taskEl.style.opacity = '0.6';
+        }
 
-        topicLink.onclick = async () => {
-          this.close();
+        const self = this;
+        taskDiv.style.cursor = 'pointer';
+        taskDiv.onclick = async () => {
+          self.close();
           const leaf = this.app.workspace.getLeaf(false);
           await leaf.openFile(task.topicFile);
         };
-
-        if (task.priority !== 'Medium') {
-          taskEl.createEl('span', {
-            text: task.priority,
-            cls: `priority-badge priority-${task.priority.toLowerCase()}`
-          });
-        }
       }
-    };
-
-    // Create filter buttons
-    const filters = [
-      { id: 'all', label: 'All', count: allTasks.length },
-      { id: 'pending', label: 'Pending', count: allTasks.filter(t => !t.completed).length },
-      { id: 'completed', label: 'Completed', count: allTasks.filter(t => t.completed).length }
-    ];
-
-    filters.forEach(filter => {
-      const btn = filterContainer.createEl('button', {
-        text: `${filter.label} (${filter.count})`,
-        cls: 'filter-btn'
+    } catch (error) {
+      console.error('Topic-Based Task Manager: Error loading tasks', error);
+      container.createEl('p', {
+        text: 'Error loading tasks: ' + error.message,
+        cls: 'mod-warning'
       });
-
-      if (filter.id === 'all') {
-        btn.addClass('active');
-      }
-
-      btn.onclick = () => {
-        this.currentFilter = filter.id;
-        filterContainer.querySelectorAll('.filter-btn').forEach(b => b.removeClass('active'));
-        btn.addClass('active');
-        renderTasks(filter.id);
-      };
-    });
-
-    renderTasks('all');
+    }
   }
 
   onClose() {
+    console.log('Topic-Based Task Manager: AllTasksModal closing');
     const { contentEl } = this;
     contentEl.empty();
   }
