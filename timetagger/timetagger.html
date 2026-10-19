@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TimeTagger</title>
+<style>
+:root {
+  --bg: #f4f5f7;
+  --card: #ffffff;
+  --text: #1f2430;
+  --muted: #6b7280;
+  --border: #e3e6eb;
+  --primary: #3b6fd8;
+  --start: #1f9d55;
+  --stop: #d64545;
+  --warn: #b7791f;
+  --hover: #eef1f5;
+  font-family: system-ui, -apple-system, 'Hiragino Sans', 'Meiryo', 'Noto Sans JP', sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171c;
+    --card: #1e2128;
+    --text: #e6e8ec;
+    --muted: #9aa1ad;
+    --border: #2d313a;
+    --primary: #6b95ee;
+    --warn: #e0a84a;
+    --hover: #272b33;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+button, input { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+.app { max-width: 1100px; margin: 0 auto; padding: 16px; }
+.muted { color: var(--muted); }
+.spacer { flex: 1; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+
+.app-header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.app-header h1 { margin: 0; font-size: 1.4rem; }
+.header-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.file-status { font-size: 0.85rem; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; margin-right: 4px; }
+.file-status.error { color: var(--stop); font-weight: 600; }
+.file-status.pending { color: var(--warn); }
+
+.btn { border: 1px solid var(--border); background: var(--card); border-radius: 8px; padding: 7px 12px; cursor: pointer; white-space: nowrap; }
+.btn:hover { background: var(--hover); }
+.btn-small { padding: 3px 9px; font-size: 0.85rem; }
+.btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary); filter: brightness(1.1); }
+.btn-start { background: var(--start); border-color: var(--start); color: #fff; min-width: 96px; }
+.btn-start:hover { background: var(--start); filter: brightness(1.1); }
+.btn-stop { background: var(--stop); border-color: var(--stop); color: #fff; min-width: 96px; }
+.btn-stop:hover { background: var(--stop); filter: brightness(1.1); }
+.btn-danger { color: var(--stop); }
+.icon-btn { border: none; background: transparent; cursor: pointer; padding: 4px 8px; border-radius: 6px; font-size: 1rem; }
+.icon-btn:hover { background: var(--hover); }
+
+/* Timer */
+.timer.running { border-color: var(--start); box-shadow: 0 0 0 1px var(--start) inset; }
+.timer-main { display: flex; gap: 12px; align-items: center; }
+.timer-clock { font-variant-numeric: tabular-nums; font-size: 1.6rem; font-weight: 600; min-width: 110px; }
+.timer-input { flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.timer-preview, .tag-suggest { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; font-size: 0.9rem; }
+.timer-preview:empty, .tag-suggest:empty { display: none; }
+
+.tag { border: none; background: color-mix(in srgb, var(--tag) 15%, transparent); color: var(--tag); border-radius: 5px; padding: 0 5px; margin: 0 1px; cursor: pointer; font-weight: 600; }
+.tag:hover { background: color-mix(in srgb, var(--tag) 28%, transparent); }
+
+/* Period nav */
+.period-nav { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 12px; }
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.segmented button { border: none; background: transparent; padding: 6px 16px; cursor: pointer; }
+.segmented button.active { background: var(--primary); color: #fff; }
+.period-step { display: flex; align-items: center; gap: 6px; }
+.period-label { font-weight: 600; min-width: 140px; text-align: center; }
+.filter-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 14px; }
+
+/* Layout */
+.layout { display: grid; grid-template-columns: 320px 1fr; gap: 14px; align-items: start; }
+.layout > .card, .layout > section { margin-bottom: 0; }
+
+/* Report */
+.report { position: sticky; top: 16px; }
+.report-total { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.report-total strong { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.report-row { display: grid; grid-template-columns: minmax(0, 1fr) 90px 64px; gap: 8px; align-items: center; width: 100%; border: none; background: transparent; padding: 5px 6px; border-radius: 6px; cursor: pointer; text-align: left; }
+.report-row:hover, .report-row.active { background: var(--hover); }
+.report-tag { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.report-bar { height: 8px; background: var(--hover); border-radius: 4px; overflow: hidden; }
+.report-bar span { display: block; height: 100%; border-radius: 4px; }
+.report-val { text-align: right; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+
+/* Records */
+.day { padding: 0; overflow: hidden; margin-bottom: 14px; }
+.day-header { display: flex; justify-content: space-between; padding: 10px 16px; font-weight: 600; border-bottom: 1px solid var(--border); }
+.record { display: grid; grid-template-columns: 120px minmax(0, 1fr) 70px auto; gap: 10px; align-items: center; padding: 9px 16px; border-bottom: 1px solid var(--border); }
+.record:last-child { border-bottom: none; }
+.record.is-running { background: color-mix(in srgb, var(--start) 8%, transparent); }
+.record-time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.9rem; }
+.record-ds { overflow-wrap: anywhere; }
+.record-dur { text-align: right; font-variant-numeric: tabular-nums; }
+.record-actions { display: flex; }
+.empty { text-align: center; color: var(--muted); }
+
+/* Modals */
+.modal-backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 0.45); display: grid; place-items: center; padding: 16px; z-index: 10; }
+.modal { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 12px; }
+.modal h2 { margin: 0; font-size: 1.15rem; }
+.modal label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; color: var(--muted); }
+.modal label input:not([type='checkbox']) { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); }
+.modal label.checkbox { flex-direction: row; align-items: center; gap: 8px; }
+.modal-actions { display: flex; gap: 8px; }
+.modal p { margin: 0; }
+.error { color: var(--stop); margin: 0; font-size: 0.9rem; }
+.warn { color: var(--warn); font-size: 0.9rem; }
+.btn-big { padding: 12px 14px; text-align: left; }
+.start-buttons { display: flex; flex-direction: column; gap: 8px; }
+dialog { border: none; padding: 0; background: transparent; color: inherit; max-width: 440px; width: calc(100% - 32px); }
+dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+dialog .modal { margin: 0; }
+
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 8px; z-index: 20; max-width: calc(100% - 32px); box-shadow: 0 4px 16px rgb(0 0 0 / 0.25); }
+
+@media (max-width: 760px) {
+  .layout { grid-template-columns: 1fr; }
+  .report { position: static; }
+  .timer-main { flex-wrap: wrap; }
+  .timer-clock { width: 100%; }
+  .record { grid-template-columns: 1fr auto; }
+  .record-time { grid-column: 1 / -1; }
+  .record-dur { text-align: left; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <h1>⏱ TimeTagger</h1>
+    <div class="header-actions">
+      <span id="fileStatus" class="file-status"></span>
+      <button class="btn" id="btnAdd">＋ 手動で追加</button>
+      <button class="btn btn-primary" id="btnDownload" hidden>CSVを保存</button>
+      <button class="btn" id="btnSwitch">ファイル切替</button>
+    </div>
+  </header>
+
+  <section id="timer" class="card timer"></section>
+
+  <nav class="period-nav card">
+    <div class="segmented" id="periods">
+      <button data-period="day">日</button>
+      <button data-period="week">週</button>
+      <button data-period="month">月</button>
+    </div>
+    <div class="period-step">
+      <button class="icon-btn" id="prev" title="前へ">‹</button>
+      <span class="period-label" id="periodLabel"></span>
+      <button class="icon-btn" id="next" title="次へ">›</button>
+      <button class="btn btn-small" id="today">今日</button>
+    </div>
+  </nav>
+
+  <div class="filter-bar" id="filterBar" hidden></div>
+
+  <main class="layout">
+    <section class="card report" id="report"></section>
+    <section class="record-list" id="records"></section>
+  </main>
+</div>
+
+<!-- Start screen: choose where the CSV log lives -->
+<div class="modal-backdrop" id="startScreen">
+  <div class="modal card">
+    <h2>⏱ TimeTagger</h2>
+    <div id="startFs" class="start-buttons">
+      <p class="muted">記録を保存する CSV ファイルを選んでください。変更は自動でこのファイルに保存されます。</p>
+      <button class="btn btn-primary btn-big" id="stReopen" hidden></button>
+      <button class="btn btn-big" id="stOpen">📂 既存の CSV ファイルを開く</button>
+      <button class="btn btn-big" id="stNew">📄 新しい CSV ファイルを作成</button>
+    </div>
+    <div id="startNoFs" class="start-buttons" hidden>
+      <p class="warn">このブラウザは CSV ファイルへの自動保存に対応していません（Chrome または Edge を推奨）。
+        このまま使う場合は、作業後に「CSVを保存」ボタンでファイルをダウンロードしてください。</p>
+      <button class="btn btn-primary btn-big" id="stLoad">📂 CSV ファイルを読み込む</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-small" id="stLocal">ファイルを使わずにブラウザ内で使う</button>
+      <span class="spacer"></span>
+      <button class="btn btn-small" id="stClose" hidden>閉じる</button>
+    </div>
+  </div>
+</div>
+
+<dialog id="editor">
+  <form class="modal card" id="editorForm">
+    <h2 id="edTitle">記録を編集</h2>
+    <label>説明<input id="edDs" placeholder="作業内容 #タグ"></label>
+    <label>開始<input type="datetime-local" id="edT1" required></label>
+    <label>終了<input type="datetime-local" id="edT2"></label>
+    <label class="checkbox"><input type="checkbox" id="edRunning"> 実行中（終了時刻なし）</label>
+    <p class="error" id="edError" hidden></p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-danger" id="edDelete">削除</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="edCancel">キャンセル</button>
+      <button type="submit" class="btn btn-primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+<input type="file" id="fileInput" accept=".csv,text/csv" hidden>
+
+<script>
+'use strict'
+
+// ===== Core: tags, time, periods =====
+// Record shape: { id, t1: ms, t2: ms | null (running), ds: string }
+
+const UNTAGGED = '#untagged'
+const TAG_RE = /#[\p{L}\p{N}_\-/]+/gu
+const TAG_SPLIT_RE = /(#[\p{L}\p{N}_\-/]+)/u
+const H = 3600000
+
+function parseTags(ds) {
+  const found = (ds || '').match(TAG_RE) || []
+  return [...new Set(found.map((t) => t.toLowerCase()))]
+}
+
+function tagsOrUntagged(ds) {
+  const tags = parseTags(ds)
+  return tags.length ? tags : [UNTAGGED]
+}
+
+function tagColor(tag) {
+  let h = 0
+  for (const ch of tag) h = (h * 31 + ch.codePointAt(0)) >>> 0
+  return `hsl(${h % 360}, 60%, 45%)`
+}
+
+function newId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+}
+
+const pad = (n) => String(n).padStart(2, '0')
+
+function formatClock(sec) {
+  sec = Math.max(0, Math.floor(sec))
+  return `${Math.floor(sec / 3600)}:${pad(Math.floor((sec % 3600) / 60))}:${pad(sec % 60)}`
+}
+
+function formatHM(sec) {
+  sec = Math.max(0, Math.round(sec))
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  return h ? `${h}h ${pad(m)}m` : `${m}m`
+}
+
+function formatTime(ms) {
+  const d = new Date(ms)
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function formatDate(ms) {
+  const d = new Date(ms)
+  const wd = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()]
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} (${wd})`
+}
+
+// Value for <input type="datetime-local">
+function toLocalInput(ms) {
+  const d = new Date(ms)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function fromLocalInput(value) {
+  const ms = new Date(value).getTime()
+  return Number.isNaN(ms) ? null : ms
+}
+
+function startOfDay(ms) {
+  const d = new Date(ms)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+
+function periodRange(kind, anchor) {
+  const d = new Date(startOfDay(anchor))
+  if (kind === 'week') {
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7)) // Monday start
+    const start = d.getTime()
+    d.setDate(d.getDate() + 7)
+    return [start, d.getTime()]
+  }
+  if (kind === 'month') {
+    d.setDate(1)
+    const start = d.getTime()
+    d.setMonth(d.getMonth() + 1)
+    return [start, d.getTime()]
+  }
+  const start = d.getTime()
+  d.setDate(d.getDate() + 1)
+  return [start, d.getTime()]
+}
+
+function shiftAnchor(kind, anchor, step) {
+  const d = new Date(anchor)
+  if (kind === 'week') d.setDate(d.getDate() + 7 * step)
+  else if (kind === 'month') {
+    d.setDate(1)
+    d.setMonth(d.getMonth() + step)
+  } else d.setDate(d.getDate() + step)
+  return d.getTime()
+}
+
+function periodLabel(kind, anchor) {
+  const [start, end] = periodRange(kind, anchor)
+  const d = new Date(start)
+  if (kind === 'month') return `${d.getFullYear()}年${d.getMonth() + 1}月`
+  if (kind === 'week') return `${formatDate(start)} – ${formatDate(end - 1)}`
+  return formatDate(start)
+}
+
+// Seconds of a record that fall inside [start, end)
+function overlapSeconds(rec, start, end, now) {
+  const a = Math.max(rec.t1, start)
+  const b = Math.min(rec.t2 ?? now, end)
+  return b > a ? (b - a) / 1000 : 0
+}
+
+function recordsInRange(recs, start, end, now) {
+  return recs.filter((r) => r.t1 < end && (r.t2 ?? now) > start)
+}
+
+function matchesFilter(rec, filter) {
+  if (!filter.length) return true
+  const tags = tagsOrUntagged(rec.ds)
+  return filter.every((t) => tags.includes(t))
+}
+
+// Totals per tag. A record with several tags counts toward each of them,
+// so the sum over tags can exceed the period total.
+function summarizeByTag(recs, start, end, now) {
+  const totals = new Map()
+  let total = 0
+  for (const r of recs) {
+    const sec = overlapSeconds(r, start, end, now)
+    if (!sec) continue
+    total += sec
+    for (const t of tagsOrUntagged(r.ds)) totals.set(t, (totals.get(t) || 0) + sec)
+  }
+  const rows = [...totals.entries()].map(([tag, seconds]) => ({ tag, seconds })).sort((a, b) => b.seconds - a.seconds)
+  return { total, rows }
+}
+
+// Group records by the local day they start on, newest first
+function groupByDay(recs) {
+  const groups = new Map()
+  for (const r of [...recs].sort((a, b) => b.t1 - a.t1)) {
+    const key = startOfDay(r.t1)
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(r)
+  }
+  return [...groups.entries()].map(([day, items]) => ({ day, items }))
+}
+
+// ===== CSV =====
+
+const CSV_HEADER = ['id', 'start', 'end', 'duration_hours', 'tags', 'description']
+
+function fmtLocal(ms) {
+  const d = new Date(ms)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+// Accepts our own format plus what Excel writes back (2026/10/19 9:05)
+function parseLocal(s) {
+  s = (s || '').trim()
+  const m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+  if (m) return new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)).getTime()
+  if (/^\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:?\d{2})$/.test(s)) {
+    const t = Date.parse(s)
+    return Number.isNaN(t) ? null : t
+  }
+  return null
+}
+
+function csvCell(v) {
+  const s = String(v)
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+// BOM + CRLF so Excel opens it as UTF-8 without garbling Japanese
+function toCSV(recs) {
+  const lines = [CSV_HEADER.join(',')]
+  for (const r of [...recs].sort((a, b) => a.t1 - b.t1)) {
+    lines.push(
+      [
+        r.id,
+        fmtLocal(r.t1),
+        r.t2 == null ? '' : fmtLocal(r.t2),
+        r.t2 == null ? '' : ((r.t2 - r.t1) / H).toFixed(2),
+        parseTags(r.ds).join(' '),
+        r.ds,
+      ].map(csvCell).join(','),
+    )
+  }
+  return '﻿' + lines.join('\r\n') + '\r\n'
+}
+
+function parseCSV(text) {
+  const rows = []
+  let row = []
+  let cell = ''
+  let quoted = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { cell += '"'; i++ }
+      else if (c === '"') quoted = false
+      else cell += c
+    } else if (c === '"') quoted = true
+    else if (c === ',') { row.push(cell); cell = '' }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++
+      row.push(cell); rows.push(row); row = []; cell = ''
+    } else cell += c
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row) }
+  return rows
+}
+
+function recordsFromCSV(text) {
+  const rows = parseCSV(text.replace(/^﻿/, '')).filter((r) => r.some((c) => c.trim() !== ''))
+  if (!rows.length) return { records: [], skipped: 0 }
+  const head = rows[0].map((h) => h.trim().toLowerCase())
+  const col = (...names) => head.findIndex((h) => names.includes(h))
+  const iId = col('id')
+  const iStart = col('start', '開始')
+  const iEnd = col('end', '終了')
+  const iDs = col('description', '説明')
+  if (iStart < 0) throw new Error('TimeTagger の CSV ではありません（start 列が見つかりません）')
+
+  const out = []
+  const ids = new Set()
+  let skipped = 0
+  for (const r of rows.slice(1)) {
+    const endStr = iEnd >= 0 ? (r[iEnd] || '').trim() : ''
+    const t1 = parseLocal(r[iStart])
+    const t2 = endStr ? parseLocal(endStr) : null
+    if (t1 == null || (endStr && (t2 == null || t2 < t1))) { skipped++; continue }
+    let id = iId >= 0 ? (r[iId] || '').trim() : ''
+    if (!id || ids.has(id)) id = newId()
+    ids.add(id)
+    out.push({ id, t1, t2, ds: iDs >= 0 ? r[iDs] || '' : '' })
+  }
+  return { records: keepOneRunning(out), skipped }
+}
+
+// Only the newest running record stays running; older ones end when the newest one started
+function keepOneRunning(recs) {
+  const newest = recs.filter((r) => r.t2 == null).sort((a, b) => b.t1 - a.t1)[0]
+  return recs.map((r) => (r.t2 == null && r !== newest ? { ...r, t2: Math.max(r.t1, newest.t1) } : r))
+}
+
+// ===== Persistence =====
+// mode 'file': File System Access API, the CSV is rewritten after every change (Chrome / Edge)
+// mode 'local': data lives in the browser; "CSVを保存" downloads it
+
+const LS_KEY = 'timetagger.records.v1'
+const FS_SUPPORTED = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window
+const PICKER = { types: [{ description: 'CSV ファイル', accept: { 'text/csv': ['.csv'] } }] }
+
+const io = { mode: null, handle: null, name: '', dirty: false, writing: false, error: '', lastModified: 0, timer: 0 }
+
+function saveLocal() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(records)) } catch {}
+}
+
+function loadLocal() {
+  try {
+    const data = JSON.parse(localStorage.getItem(LS_KEY) || '[]')
+    return Array.isArray(data)
+      ? data.filter((r) => r && typeof r.id === 'string' && typeof r.t1 === 'number' && (r.t2 === null || typeof r.t2 === 'number') && typeof r.ds === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+
+// File handles survive reloads in IndexedDB; the browser asks for permission again on reopen
+function idb(fn) {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('timetagger', 1)
+    req.onupgradeneeded = () => req.result.createObjectStore('kv')
+    req.onerror = () => reject(req.error)
+    req.onsuccess = () => {
+      try {
+        const tx = req.result.transaction('kv', 'readwrite')
+        const r = fn(tx.objectStore('kv'))
+        tx.oncomplete = () => resolve(r?.result)
+        tx.onerror = () => reject(tx.error)
+      } catch (e) {
+        reject(e)
+      }
+    }
+  })
+}
+const idbGet = (k) => idb((s) => s.get(k)).catch(() => undefined)
+const idbSet = (k, v) => idb((s) => s.put(v, k)).catch(() => {})
+
+async function readText(file) {
+  const buf = await file.arrayBuffer()
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf)
+  } catch {
+    return new TextDecoder('shift_jis').decode(buf) // Saved by Excel as "CSV (カンマ区切り)"
+  }
+}
+
+function scheduleSave(delay = 400) {
+  io.dirty = true
+  renderStatus()
+  if (io.mode !== 'file') return
+  clearTimeout(io.timer)
+  io.timer = setTimeout(flush, delay)
+}
+
+async function flush() {
+  clearTimeout(io.timer)
+  if (io.mode !== 'file' || !io.dirty || io.writing) return
+  io.writing = true
+  io.dirty = false
+  renderStatus()
+  try {
+    const current = await io.handle.getFile()
+    if (io.lastModified && current.lastModified !== io.lastModified) {
+      const overwrite = confirm(
+        `「${io.name}」が他のアプリで変更されています。\n\nOK: このアプリの内容で上書き保存\nキャンセル: ファイルを読み込み直す（このアプリでの未保存の変更は破棄）`,
+      )
+      if (!overwrite) {
+        io.writing = false
+        await openHandle(io.handle)
+        return
+      }
+    }
+    const w = await io.handle.createWritable()
+    await w.write(toCSV(records))
+    await w.close()
+    io.lastModified = (await io.handle.getFile()).lastModified
+    io.error = ''
+  } catch (e) {
+    io.dirty = true
+    io.error = e.name === 'NotAllowedError' ? '書き込み許可がありません' : 'ファイルに書き込めません（Excel などで開いていませんか？）'
+    console.error(e)
+  } finally {
+    io.writing = false
+  }
+  renderStatus()
+  if (io.dirty && !io.error) scheduleSave(0)
+}
+
+async function retrySave() {
+  if (io.mode !== 'file') return
+  try {
+    if ((await io.handle.requestPermission({ mode: 'readwrite' })) !== 'granted') return
+  } catch {}
+  io.error = ''
+  await flush()
+  if (io.error) toast(io.error)
+}
+
+async function openHandle(handle, isNew = false) {
+  if ((await handle.queryPermission({ mode: 'readwrite' })) !== 'granted' &&
+      (await handle.requestPermission({ mode: 'readwrite' })) !== 'granted') {
+    throw new Error('ファイルへの書き込みが許可されませんでした')
+  }
+  const file = await handle.getFile()
+  const { records: recs, skipped } = recordsFromCSV(isNew ? '' : await readText(file))
+  if (skipped && !confirm(`${skipped} 行の日時を読み取れませんでした。\nこのまま続けると、次の保存でそれらの行はファイルから削除されます。続けますか？`)) {
+    throw new Error('読み込みを中止しました')
+  }
+  records = recs
+  Object.assign(io, { mode: 'file', handle, name: handle.name, dirty: false, error: '', lastModified: file.lastModified })
+  await idbSet('handle', handle)
+  if (isNew) {
+    io.lastModified = 0
+    io.dirty = true
+    await flush()
+  }
+  afterLoad()
+}
+
+function useLocal(recs, name = '') {
+  records = recs
+  Object.assign(io, { mode: 'local', handle: null, name, dirty: false, error: '' })
+  afterLoad()
+}
+
+function downloadCSV() {
+  const name = io.name || `timetagger-log-${toLocalInput(Date.now()).slice(0, 10)}.csv`
+  const url = URL.createObjectURL(new Blob([toCSV(records)], { type: 'text/csv' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  io.name = name
+  io.dirty = false
+  renderStatus()
+}
+
+// ===== State =====
+
+let records = []
+let period = 'week'
+let anchor = Date.now()
+let tagFilter = []
+let editingId = null
+let timerKey = null
+let lastMainRender = 0
+
+const $ = (id) => document.getElementById(id)
+const running = () => records.find((r) => r.t2 == null)
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+}
+
+function tagChip(tag) {
+  const t = tag.toLowerCase()
+  return `<button type="button" class="tag" data-tag="${escapeHtml(t)}" style="--tag:${tagColor(t)}">${escapeHtml(tag)}</button>`
+}
+
+function tagText(text) {
+  if (!text) return '<span class="muted">(説明なし)</span>'
+  return text.split(TAG_SPLIT_RE).map((p) => (p.startsWith('#') ? tagChip(p) : escapeHtml(p))).join('')
+}
+
+function toast(msg) {
+  const el = $('toast')
+  el.textContent = msg
+  el.hidden = false
+  clearTimeout(toast.t)
+  toast.t = setTimeout(() => (el.hidden = true), 4000)
+}
+
+// Call after every change to records
+function commit() {
+  saveLocal()
+  scheduleSave()
+  render()
+}
+
+function afterLoad() {
+  saveLocal()
+  $('startScreen').hidden = true
+  timerKey = null
+  render()
+  renderStatus()
+}
+
+// ===== Rendering =====
+
+function render() {
+  renderTimer()
+  renderMain()
+}
+
+function renderStatus() {
+  const el = $('fileStatus')
+  el.className = 'file-status'
+  $('btnDownload').hidden = io.mode !== 'local'
+  if (io.mode === 'file') {
+    if (io.error) {
+      el.classList.add('error')
+      el.innerHTML = `⚠ ${escapeHtml(io.error)} <button class="btn btn-small" id="btnRetry">再試行</button>`
+    } else if (io.dirty || io.writing) {
+      el.classList.add('pending')
+      el.textContent = `💾 ${io.name} に保存中…`
+    } else {
+      el.textContent = `💾 ${io.name} に保存済み`
+    }
+  } else if (io.mode === 'local') {
+    if (io.dirty) el.classList.add('pending')
+    el.textContent = io.dirty ? '⚠ CSV 未保存の変更あり（ブラウザ内には保存済み）' : 'ブラウザ内に保存中'
+  } else {
+    el.textContent = ''
+  }
+}
+
+function recentTags() {
+  const seen = []
+  for (const r of [...records].sort((a, b) => b.t1 - a.t1)) {
+    for (const t of parseTags(r.ds)) if (!seen.includes(t)) seen.push(t)
+    if (seen.length >= 10) break
+  }
+  return seen.slice(0, 10)
+}
+
+// The timer is rebuilt only when the running record changes, so typing never loses focus
+function renderTimer() {
+  const run = running()
+  const key = run ? run.id : 'idle'
+  const el = $('timer')
+  if (key === timerKey) {
+    if (!run) el.querySelector('.tag-suggest').innerHTML = recentTags().map(tagChip).join('')
+    else if (document.activeElement !== $('timerInput')) {
+      $('timerInput').value = run.ds
+      $('timerPreview').innerHTML = run.ds ? tagText(run.ds) : ''
+      updateTitle()
+    }
+    return
+  }
+  timerKey = key
+  el.classList.toggle('running', !!run)
+  if (run) {
+    el.innerHTML = `
+      <div class="timer-main">
+        <div class="timer-clock" id="clock">${formatClock((Date.now() - run.t1) / 1000)}</div>
+        <input class="timer-input" id="timerInput" placeholder="作業内容 #タグ" value="${escapeHtml(run.ds)}">
+        <button class="btn btn-stop" id="btnStop">■ 停止</button>
+      </div>
+      <div class="timer-preview" id="timerPreview">${run.ds ? tagText(run.ds) : ''}</div>`
+  } else {
+    el.innerHTML = `
+      <form class="timer-main" id="timerForm">
+        <div class="timer-clock muted">0:00:00</div>
+        <input class="timer-input" id="timerInput" placeholder="何をしますか？ 例: 資料作成 #仕事 #projectA" autocomplete="off">
+        <button class="btn btn-start" type="submit">▶ 開始</button>
+      </form>
+      <div class="tag-suggest">${recentTags().map(tagChip).join('')}</div>`
+  }
+  updateTitle()
+}
+
+function updateTitle() {
+  const run = running()
+  document.title = run ? `▶ ${formatClock((Date.now() - run.t1) / 1000)} ${run.ds || '計測中'} - TimeTagger` : 'TimeTagger'
+}
+
+function renderMain() {
+  const now = Date.now()
+  lastMainRender = now
+  const [start, end] = periodRange(period, anchor)
+  const visible = recordsInRange(records, start, end, now).filter((r) => matchesFilter(r, tagFilter))
+
+  for (const b of $('periods').children) b.classList.toggle('active', b.dataset.period === period)
+  $('periodLabel').textContent = periodLabel(period, anchor)
+
+  const fb = $('filterBar')
+  fb.hidden = !tagFilter.length
+  fb.innerHTML = `<span class="muted">絞り込み:</span>${tagFilter.map(tagChip).join('')}<button class="btn btn-small" id="btnClearFilter">解除</button>`
+
+  // Report
+  const { total, rows } = summarizeByTag(visible, start, end, now)
+  const max = rows[0]?.seconds || 1
+  $('report').innerHTML =
+    `<div class="report-total"><span class="muted">合計</span><strong>${formatHM(total)}</strong></div>` +
+    (rows.length ? '' : '<p class="muted">データがありません</p>') +
+    rows.map(({ tag, seconds }) => `
+      <button class="report-row ${tagFilter.includes(tag) ? 'active' : ''}" data-tag="${escapeHtml(tag)}" title="クリックで絞り込み">
+        <span class="report-tag" style="color:${tagColor(tag)}">${escapeHtml(tag)}</span>
+        <span class="report-bar"><span style="width:${(seconds / max) * 100}%;background:${tagColor(tag)}"></span></span>
+        <span class="report-val">${formatHM(seconds)}</span>
+      </button>`).join('')
+
+  // Records grouped by day
+  if (!visible.length) {
+    $('records').innerHTML = '<p class="card empty">この期間の記録はありません。</p>'
+    return
+  }
+  $('records').innerHTML = groupByDay(visible).map(({ day, items }) => {
+    const [ds, de] = periodRange('day', day)
+    const dayTotal = items.reduce((sum, r) => sum + overlapSeconds(r, ds, de, now), 0)
+    return `
+      <div class="card day">
+        <div class="day-header"><span>${formatDate(day)}</span><span class="muted">${formatHM(dayTotal)}</span></div>
+        ${items.map((r) => `
+          <div class="record ${r.t2 == null ? 'is-running' : ''}" data-id="${escapeHtml(r.id)}">
+            <div class="record-time">${formatTime(r.t1)} – ${r.t2 == null ? '実行中' : formatTime(r.t2)}</div>
+            <div class="record-ds">${tagText(r.ds)}</div>
+            <div class="record-dur" ${r.t2 == null ? 'data-live' : ''}>${formatHM(((r.t2 ?? now) - r.t1) / 1000)}</div>
+            <div class="record-actions">
+              ${r.t2 != null ? '<button class="icon-btn" data-act="resume" title="同じ内容で再開">▶</button>' : ''}
+              <button class="icon-btn" data-act="edit" title="編集">✎</button>
+            </div>
+          </div>`).join('')}
+      </div>`
+  }).join('')
+}
+
+// Per-second update touches only the live numbers, so clicks are never swallowed by a re-render
+function tick() {
+  const run = running()
+  if (!run) return
+  const now = Date.now()
+  const clock = $('clock')
+  if (clock) clock.textContent = formatClock((now - run.t1) / 1000)
+  const live = document.querySelector('[data-live]')
+  if (live) live.textContent = formatHM((now - run.t1) / 1000)
+  updateTitle()
+  if (now - lastMainRender > 30000 && !$('editor').open) renderMain()
+}
+
+// ===== Actions =====
+
+function stopRunning(at) {
+  records = records.map((r) => (r.t2 == null ? { ...r, t2: Math.max(at, r.t1) } : r))
+}
+
+function startTimer(ds) {
+  const at = Date.now()
+  stopRunning(at)
+  records.push({ id: newId(), t1: at, t2: null, ds })
+  commit()
+}
+
+function toggleTag(tag) {
+  tagFilter = tagFilter.includes(tag) ? tagFilter.filter((t) => t !== tag) : [...tagFilter, tag]
+  renderMain()
+}
+
+function openEditor(rec) {
+  const now = Date.now()
+  editingId = rec ? rec.id : null
+  rec = rec || { t1: now - H, t2: now, ds: '' }
+  $('edTitle').textContent = editingId ? '記録を編集' : '記録を追加'
+  $('edDs').value = rec.ds
+  $('edT1').value = toLocalInput(rec.t1)
+  $('edT2').value = toLocalInput(rec.t2 ?? now)
+  $('edRunning').checked = rec.t2 == null
+  $('edT2').disabled = rec.t2 == null
+  $('edDelete').hidden = !editingId
+  $('edError').hidden = true
+  $('editor').showModal()
+}
+
+function saveEditor(e) {
+  e.preventDefault()
+  const now = Date.now()
+  const isRunning = $('edRunning').checked
+  const t1 = fromLocalInput($('edT1').value)
+  const t2 = isRunning ? null : fromLocalInput($('edT2').value)
+  const fail = (msg) => { $('edError').textContent = msg; $('edError').hidden = false }
+  if (t1 == null || (!isRunning && t2 == null)) return fail('日時を正しく入力してください')
+  if (!isRunning && t2 <= t1) return fail('終了は開始より後にしてください')
+  if (isRunning && t1 > now) return fail('実行中の記録は未来に開始できません')
+
+  const rec = { id: editingId || newId(), t1, t2, ds: $('edDs').value.trim() }
+  records = records.filter((r) => r.id !== rec.id)
+  if (isRunning) stopRunning(now) // only one record may run at a time
+  records.push(rec)
+  $('editor').close()
+  commit()
+}
+
+function showStart() {
+  $('startFs').hidden = !FS_SUPPORTED
+  $('startNoFs').hidden = FS_SUPPORTED
+  $('stClose').hidden = !io.mode
+  $('stReopen').hidden = true
+  $('startScreen').hidden = false
+  if (FS_SUPPORTED) {
+    idbGet('handle').then((h) => {
+      if (!h) return
+      $('stReopen').textContent = `▶ 前回のファイルで続ける（${h.name}）`
+      $('stReopen').hidden = false
+      $('stReopen').onclick = () => guarded(() => openHandle(h))
+    })
+  }
+}
+
+// Run a file action and report problems instead of throwing; a cancelled picker is silent
+async function guarded(fn) {
+  try {
+    if (io.mode === 'file') await flush()
+    await fn()
+  } catch (e) {
+    if (e.name !== 'AbortError') toast(e.message || String(e))
+    console.error(e)
+  }
+}
+
+// ===== Events =====
+
+$('timer').addEventListener('submit', (e) => {
+  e.preventDefault()
+  startTimer($('timerInput').value.trim())
+})
+
+$('timer').addEventListener('click', (e) => {
+  if (e.target.id === 'btnStop') {
+    stopRunning(Date.now())
+    commit()
+    return
+  }
+  const tag = e.target.closest('.tag')?.dataset.tag
+  if (!tag) return
+  const input = $('timerInput')
+  if (running()) return toggleTag(tag)
+  if (!input.value.toLowerCase().includes(tag)) input.value = `${input.value.trim()} ${tag}`.trim()
+  input.focus()
+})
+
+$('timer').addEventListener('input', (e) => {
+  const run = running()
+  if (e.target.id !== 'timerInput' || !run) return
+  run.ds = e.target.value
+  $('timerPreview').innerHTML = run.ds ? tagText(run.ds) : ''
+  updateTitle()
+  saveLocal()
+  scheduleSave(800)
+  renderMain()
+})
+
+$('periods').addEventListener('click', (e) => {
+  if (!e.target.dataset.period) return
+  period = e.target.dataset.period
+  renderMain()
+})
+$('prev').onclick = () => { anchor = shiftAnchor(period, anchor, -1); renderMain() }
+$('next').onclick = () => { anchor = shiftAnchor(period, anchor, 1); renderMain() }
+$('today').onclick = () => { anchor = Date.now(); renderMain() }
+
+for (const id of ['report', 'records', 'filterBar']) {
+  $(id).addEventListener('click', (e) => {
+    if (e.target.id === 'btnClearFilter') { tagFilter = []; renderMain(); return }
+    const tag = e.target.closest('[data-tag]')?.dataset.tag
+    if (tag) return toggleTag(tag)
+    const act = e.target.closest('[data-act]')?.dataset.act
+    const rec = records.find((r) => r.id === e.target.closest('[data-id]')?.dataset.id)
+    if (!act || !rec) return
+    if (act === 'resume') startTimer(rec.ds)
+    if (act === 'edit') openEditor(rec)
+  })
+}
+
+$('btnAdd').onclick = () => openEditor(null)
+$('btnDownload').onclick = downloadCSV
+$('btnSwitch').onclick = () => guarded(async () => showStart())
+$('fileStatus').addEventListener('click', (e) => e.target.id === 'btnRetry' && retrySave())
+
+$('editorForm').addEventListener('submit', saveEditor)
+$('edCancel').onclick = () => $('editor').close()
+$('edRunning').onchange = (e) => ($('edT2').disabled = e.target.checked)
+$('edDelete').onclick = () => {
+  if (!confirm('この記録を削除しますか？')) return
+  records = records.filter((r) => r.id !== editingId)
+  $('editor').close()
+  commit()
+}
+$('editor').addEventListener('click', (e) => e.target === $('editor') && $('editor').close())
+
+$('stOpen').onclick = () => guarded(async () => {
+  const [h] = await showOpenFilePicker(PICKER)
+  await openHandle(h)
+})
+$('stNew').onclick = () => guarded(async () => {
+  const h = await showSaveFilePicker({ ...PICKER, suggestedName: 'timetagger-log.csv' })
+  await openHandle(h, true)
+})
+$('stLoad').onclick = () => $('fileInput').click()
+$('fileInput').onchange = (e) => guarded(async () => {
+  const file = e.target.files[0]
+  e.target.value = ''
+  if (!file) return
+  const { records: recs, skipped } = recordsFromCSV(await readText(file))
+  if (skipped) toast(`${skipped} 行の日時を読み取れませんでした`)
+  useLocal(recs, file.name)
+})
+$('stLocal').onclick = () => useLocal(io.mode ? records : loadLocal())
+$('stClose').onclick = () => ($('startScreen').hidden = true)
+
+window.addEventListener('beforeunload', (e) => {
+  if (io.mode === 'file' && io.dirty && !io.error) flush()
+  if (io.dirty) e.preventDefault()
+})
+
+setInterval(tick, 1000)
+render()
+showStart()
+</script>
+</body>
+</html>
